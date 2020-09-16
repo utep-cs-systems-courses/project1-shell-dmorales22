@@ -117,7 +117,6 @@ def redirect_u_input(args): #Redirects
 	path_str = path[0]
 	program = args[0]
 	program_str = program[0]
-	lineNum = 1
 
 	pid = os.getpid()               # get and remember pid
 	rc = os.fork()
@@ -128,7 +127,7 @@ def redirect_u_input(args): #Redirects
 
 	elif rc == 0:                   # child
 		os.close(1)                 # redirect child's stdout
-		fdIn = os.open(path_str, os.O_RDONLY);
+		os.open(path_str, os.O_CREAT | os.O_WRONLY)
 		os.set_inheritable(1, True)
 
 		args.pop()
