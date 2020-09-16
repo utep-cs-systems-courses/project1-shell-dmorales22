@@ -118,6 +118,7 @@ def redirect_u_input(args): #Redirects
 	program = args[0]
 	program_str = program[0]
 
+	print(path_str)
 	pid = os.getpid()               # get and remember pid
 	rc = os.fork()
 
@@ -127,13 +128,13 @@ def redirect_u_input(args): #Redirects
 
 	elif rc == 0:                   # child
 		os.close(1)                 # redirect child's stdout
-		os.open(path_str, os.O_CREAT | os.O_WRONLY)
+		fdOut = os.open(path_str, os.O_CREAT | os.O_WRONLY)
 		os.set_inheritable(1, True)
 
 		args.pop()
 
 		for dir in re.split(":", os.environ['PATH']): # try each directory in path
-			program = "%s/%s" % (dir, program)
+			program = "%s/%s" % (dir, program_str)
 			try:
 				os.execve(program, args[0], os.environ) # try to exec program
 			except FileNotFoundError:             # ...expected
