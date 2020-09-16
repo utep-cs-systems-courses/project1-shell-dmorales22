@@ -34,9 +34,10 @@ def shell_input(u_str): #This method checks out string
 		pipe_u(n_args)
 		return
 
-	if '>' in u_str:
+	if '>' in u_str: #Redirects
 		n_args = []
 		args = u_str.split('>')
+
 		for i in range(len(args)):
 			n_args.append(args[i].split())
 
@@ -49,15 +50,14 @@ def shell_input(u_str): #This method checks out string
 	#	for i in range(len(args)):
 	#		n_args.append(args[i].split())
 
-	#	print(n_args)
-	#	redirect_u_output(n_args)
+	#	redirect_u_input(n_args)
 	#	return
 
-	if '&' in u_str:
+	if '&' in u_str: #For background processes
 		n_args = []
 		args = u_str.split('&')
 		
-		if args[-1] == "":
+		if args[-1] == "": #Runs background process
 			args.remove("")
 			for i in range(len(args)):
 				n_args.append(args[i].split())
@@ -66,7 +66,7 @@ def shell_input(u_str): #This method checks out string
 			for i in range(len(n_args)):
 				background_exec_u(n_args[i])
 
-		else:
+		else: #Runs processes normally
 			for i in range(len(args)):
 				n_args.append(args[i].split())
 
@@ -130,14 +130,6 @@ def redirect_u_input(args): #Redirects
 		os.close(1)                 # redirect child's stdout
 		fdIn = os.open(path_str, os.O_RDONLY);
 		os.set_inheritable(1, True)
-
-		input = os.read(fdIn, 10000)  # read up to 10k bytes
-		lines = re.split(b"\n", input)
-
-		for line in lines:
-			strToPrint = f"{lineNum:5d}: {line.decode()}\n"
-			os.write(1    , strToPrint.encode()) # write to fd1 (standard output)
-			lineNum += 1
 
 		args.pop()
 
