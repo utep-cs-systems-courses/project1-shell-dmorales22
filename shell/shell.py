@@ -50,7 +50,7 @@ def shell_input(u_str): #This method checks out string
 	#	for i in range(len(args)):
 	#		n_args.append(args[i].split())
 
-	#	redirect_u_input(n_args)
+	#	redirect_u_ouput(n_args)
 	#	return
 
 	if '&' in u_str: #For background processes
@@ -62,7 +62,6 @@ def shell_input(u_str): #This method checks out string
 			for i in range(len(args)):
 				n_args.append(args[i].split())
 
-			print(n_args)
 			for i in range(len(n_args)):
 				background_exec_u(n_args[i])
 
@@ -98,6 +97,7 @@ def redirect_u_output(args): #Redirects.
 
 		args.pop()
 
+		#os.write(1,
 		for dir in re.split(":", os.environ['PATH']): # try each directory in path
 			program = "%s/%s" % (dir, program)
 			try:
@@ -118,7 +118,6 @@ def redirect_u_input(args): #Redirects
 	program = args[0]
 	program_str = program[0]
 
-	print(path_str)
 	pid = os.getpid()               # get and remember pid
 	rc = os.fork()
 
@@ -238,9 +237,19 @@ def background_exec_u(args): #This method executes commands in background.
 	print(args[0] + " command not found.")
 	sys.exit(-1)
 
+def os_input():
+	prompt = "$ "
+	if "PS1" in os.environ:
+		prompt = os.environ["PS1"]
+
+	os.write(1, prompt.encode())
+	u_str = os.read(0,1000).decode()
+	return u_str
+
 def main():
 	while(1): #Everything is ran in loop
-		u_str = input()
+		u_str = os_input()
+		#u_str = input()
 		args = u_str.splitlines()
 
 		for i in range(len(args)): #For inputs that are multiple lines. 
