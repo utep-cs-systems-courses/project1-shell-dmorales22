@@ -31,7 +31,7 @@ def shell_input(u_str): #This method checks out string
 		for i in range(len(args)):
 			n_args.append(args[i].split())
 
-		pipe_u(n_args)
+		pipe(n_args)
 		return
 
 	if '>' in u_str: #Redirects
@@ -44,14 +44,14 @@ def shell_input(u_str): #This method checks out string
 		redirect_u_input(n_args)
 		return
 
-	#if '<' in u_str: #WIP
-	#	n_args = []
-	#	args = u_str.split('<')
-	#	for i in range(len(args)):
-	#		n_args.append(args[i].split())
+	if '<' in u_str: #WIP
+		n_args = []
+		args = u_str.split('<')
+		for i in range(len(args)):
+			n_args.append(args[i].split())
 
-	#	redirect_u_ouput(n_args)
-	#	return
+		redirect_u_ouput(n_args)
+		return
 
 	if '&' in u_str: #For background processes
 		n_args = []
@@ -78,39 +78,9 @@ def shell_input(u_str): #This method checks out string
 	exec_u(args)
 
 def redirect_u_output(args): #Redirects. 
-	path = args[1]
-	path_str = path[0]
-	program = args[0]
-	program_str = program[0]
-
-	pid = os.getpid()               # get and remember pid
-	rc = os.fork()
-
-	if rc < 0:
-		os.write(2, ("fork failed, returning %d\n" % rc).encode())
-		sys.exit(1)
-
-	elif rc == 0:                   # child
-		os.close(1)                 # redirect child's stdout
-		os.open(path_str, os.O_RDONLY);
-		os.set_inheritable(1, True)
-
-		args.pop()
-
-		#os.write(1,
-		for dir in re.split(":", os.environ['PATH']): # try each directory in path
-			program = "%s/%s" % (dir, program)
-			try:
-				os.execve(program, args[0], os.environ) # try to exec program
-			except FileNotFoundError:             # ...expected
-				pass                              # ...fail quietly 
-
-		return
-
-	else:                           # parent (forked ok)
-		childPidCode = os.wait()
-
-	sys.exit(-1)
+    #Incomplete
+    print("")
+    return
 
 def redirect_u_input(args): #Redirects
 	path = args[1]
@@ -144,29 +114,29 @@ def redirect_u_input(args): #Redirects
 	else:                           # parent (forked ok)
 		childPidCode = os.wait()
 
-	sys.exit(-1)
+	return 
 
-def pipe_u(args): #Method for pipe instructions
-	arg1, arg2 = args[0], args[1]  #Separating commands (only two)
-	s_in = os.dup(0) 
-	s_out = os.dup(1) 
-	fd_in = os.dup(s_in) 
+def pipe(args): #Method for pipe instructions
+    arg1, arg2 = args[0], args[1]  #Separating commands (only two)
+    pipe_read, pipe_write = os.pipe()
 
-	pipe_r, pipe_w = os.pipe() #Starts pipe
-	os.dup2(pipe_w, 1) 
+    for f in (pipe_read, pipe_write):
+        os.set_inheritable(f, True)
 
-	exec_u(arg1) #Running first command that does wait. 
-	os.dup2(pipe_r, 0) 
-	os.dup2(s_out, 1) 
+    rc = os.fork()
 
-	background_exec_u(arg2) #Running second command that doesn't wait.
-	os.dup2(s_in, 0) 
+    if rc == 0:
+        os.close(pipe_read)
+        std_in = os.dup(pipe_write)
+        for fd in (pipe_read, pipe_write):
+            os.close(fd)
+        exec_u(arg1)
 
-	os.close(s_in) #Closes out input and output
-	os.close(s_out)
-	os.close(pipe_r)
-	os.close(pipe_w)
-	return
+    elif rc > 0:
+        os.close(pipe_write)
+        os.dup(pipe_read)
+        background_exec_u(arg2)
+    return
 
 def exec_u(args): #This method execs commands using forks. 
 	pid = os.getpid()
@@ -247,13 +217,13 @@ def os_input():
 	return u_str
 
 def main():
-	while(1): #Everything is ran in loop
-		u_str = os_input()
-		#u_str = input()
-		args = u_str.splitlines()
+    while(1): #Everything is ran in loop
+        u_str = os_input()
+        #u_str = input()
+        args = u_str.splitlines()
 
-		for i in range(len(args)): #For inputs that are multiple lines. 
-			shell_input(str(args[i]))
+        for i in range(len(args)): #For inputs that are multiple lines. 
+            shell_input(str(args[i]))
 
 
 main()
