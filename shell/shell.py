@@ -11,78 +11,84 @@ import sys
 import re 
 
 def shell_input(u_str): #This method checks out string 
-	if '' == u_str or u_str.isspace():
-		return
+    if '' == u_str or u_str.isspace():
+        return
 
-	if 'exit' in u_str:  #If exit is detected, then program quits 
-		sys.exit(0)
+    if 'exit' in u_str:  #If exit is detected, then program quits 
+        sys.exit(0)
 
-	if 'cd' in u_str: #Changes directory using input
-		try:
-			os.chdir(u_str.split()[1])
-		except Exception:
-			print("cd: no such file or directory: {}".format(args[1]))
-		return
+    if 'cd' in u_str: #Changes directory using input
+        try:
+            os.chdir(u_str.split()[1])
+        except Exception:
+            print("cd: no such file or directory: {}".format(args[1]))
+        return
 
-	if '|' in u_str: #Detects pipes from the string
-		n_args = []
-		args = u_str.split('|')
-		
-		for i in range(len(args)):
-			n_args.append(args[i].split())
+    if '|' in u_str: #Detects pipes from the string
+        pid = os.getpid()
+        rc = os.fork()
+        if rc == 0:
+            n_args = []
+            args = u_str.split('|')
+            
+            for i in range(len(args)):
+                n_args.append(args[i].split())
 
-		pipe(n_args)
-		return
+            pipe(n_args)
+        else: 
+            childPidCode = os.wait()
+            main()
+            return
 
-	if '>' in u_str: #Redirects
-		n_args = []
-		args = u_str.split('>')
+    if '>' in u_str: #Redirects
+        n_args = []
+        args = u_str.split('>')
 
-		for i in range(len(args)):
-			n_args.append(args[i].split())
+        for i in range(len(args)):
+            n_args.append(args[i].split())
 
-		redirect_u_input(n_args)
-		return
+        redirect_output(n_args)
+        return
 
-	if '<' in u_str: #WIP
-		n_args = []
-		args = u_str.split('<')
-		for i in range(len(args)):
-			n_args.append(args[i].split())
+    if '<' in u_str: #WIP
+        n_args = []
+        args = u_str.split('<')
+        for i in range(len(args)):
+            n_args.append(args[i].split())
 
-		redirect_u_ouput(n_args)
-		return
+        redirect_input(n_args)
+        return
 
-	if '&' in u_str: #For background processes
-		n_args = []
-		args = u_str.split('&')
-		
-		if args[-1] == "": #Runs background process
-			args.remove("")
-			for i in range(len(args)):
-				n_args.append(args[i].split())
+    if '&' in u_str: #For background processes
+        n_args = []
+        args = u_str.split('&')
 
-			for i in range(len(n_args)):
-				background_exec_u(n_args[i])
+        if args[-1] == "": #Runs background process
+            args.remove("")
+            for i in range(len(args)):
+                n_args.append(args[i].split())
 
-		else: #Runs processes normally
-			for i in range(len(args)):
-				n_args.append(args[i].split())
+            for i in range(len(n_args)):
+                background_exec(n_args[i])
 
-			for i in range(len(n_args)):
-				exec_u(n_args[i])
+        else: #Runs processes normally
+            for i in range(len(args)):
+                n_args.append(args[i].split())
 
-		return
+            for i in range(len(n_args)):
+                exec(n_args[i])
 
-	args = u_str.split()
-	exec_u(args)
+        return
 
-def redirect_u_output(args): #Redirects. 
+    args = u_str.split()
+    exec(args)
+
+def redirect_input(args): #Redirects. 
     #Incomplete
     print("")
     return
 
-def redirect_u_input(args): #Redirects
+def redirect_output(args): #Redirects
 	path = args[1]
 	path_str = path[0]
 	program = args[0]
@@ -118,27 +124,54 @@ def redirect_u_input(args): #Redirects
 
 def pipe(args): #Method for pipe instructions
     arg1, arg2 = args[0], args[1]  #Separating commands (only two)
-    pipe_read, pipe_write = os.pipe()
+    pipe_read, pipe_write = os.pipe() #Creates pipe
 
     for f in (pipe_read, pipe_write):
         os.set_inheritable(f, True)
 
-    rc = os.fork()
+    rc = os.fork() #Creates fork
 
-    if rc == 0:
-        os.close(pipe_read)
-        std_in = os.dup(pipe_write)
-        for fd in (pipe_read, pipe_write):
-            os.close(fd)
-        exec_u(arg1)
+    if rc < 0: 
+        os.write(2,("Fork failed, returning %d\n" % rc).encode())
+        sys.exit(1)
+
+    elif rc == 0: #Runs first command
+        os.close(1) 
+        file_descriptor = os.dup(pipe_write) #Gets file descriptor from pipe_write
+        os.set_inheritable(1, True) #Sets the inheritable flag for file descriptor to use in child process
+
+        for file_descriptor in (pipe_read, pipe_write): 
+            os.close(file_descriptor)
+        
+        pipe_exec(arg1)
 
     elif rc > 0:
-        os.close(pipe_write)
-        os.dup(pipe_read)
-        background_exec_u(arg2)
-    return
+        os.close(0)
+        file_descriptor = os.dup(pipe_read)
+        os.set_inheritable(0, True)
 
-def exec_u(args): #This method execs commands using forks. 
+        for file_descriptor in (pipe_write, pipe_read):
+            os.close(file_descriptor)
+        
+        pipe_exec(arg2)
+
+    else:
+        main()
+        return
+
+def pipe_exec(args):
+
+    for dir in re.split(':', os.environ['PATH']):  # try each directory in the path
+        program = "%s/%s" % (dir, args[0])
+        try:
+            os.execve(program, args, os.environ)  # try to exec program
+        except FileNotFoundError:  # ...expected
+            pass  # ...fail quietly
+    os.write(2, ("Could not exec %s\n" % parent[0]).encode())
+    sys.exit(1)  # terminate with error
+
+
+def exec(args): #This method execs commands using forks. 
 	pid = os.getpid()
 	rc = os.fork()
 
@@ -172,9 +205,9 @@ def exec_u(args): #This method execs commands using forks.
 			return
 
 	print(args[0] + " command not found.")
-	sys.exit(-1)
+	sys.exit(0)
 
-def background_exec_u(args): #This method executes commands in background. 
+def background_exec(args): #This method executes commands in background. 
 	pid = os.getpid()
 	rc = os.fork()
 	program = args[0]
