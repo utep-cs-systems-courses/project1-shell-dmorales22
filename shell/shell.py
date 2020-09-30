@@ -2,7 +2,7 @@
 #Course: CS 4375 Theory of Operating Systems
 #Instructor: Dr. Eric Freudenthal
 #T.A: David Pruitt 
-#Assignment: Lab 2
+#Assignment: Project 1 
 #Last Modification: 09/15/2020
 #Purpose: Basic shell
 
@@ -27,6 +27,11 @@ def shell_input(u_str): #This method checks out string
     if '|' in u_str: #Detects pipes from the string
         pid = os.getpid()
         rc = os.fork()
+
+        if rc < 0:
+            os.write(2, ("fork failed, returning %d\n" % rc).encode())
+            sys.exit(1)
+
         if rc == 0:
             n_args = []
             args = u_str.split('|')
@@ -35,12 +40,13 @@ def shell_input(u_str): #This method checks out string
                 n_args.append(args[i].split())
 
             pipe(n_args)
+
         else: 
             childPidCode = os.wait()
             main()
             return
 
-    if '>' in u_str: #Redirects
+    if '>' in u_str: #Redirect output
         n_args = []
         args = u_str.split('>')
 
@@ -50,9 +56,10 @@ def shell_input(u_str): #This method checks out string
         redirect_output(n_args)
         return
 
-    if '<' in u_str: #WIP
+    if '<' in u_str: #Redirect input
         n_args = []
         args = u_str.split('<')
+
         for i in range(len(args)):
             n_args.append(args[i].split())
 
@@ -84,29 +91,54 @@ def shell_input(u_str): #This method checks out string
     exec(args)
 
 def redirect_input(args): #Redirects. 
-    #Incomplete
-    print("")
-    return
+    path = args[1] #Splits up input for forks and redirects
+    path_str = path[0]
+    program = args[0]
+    program_str = program[0]
 
-def redirect_output(args): #Redirects
-	path = args[1]
+    pid = os.getpid()               # get and remember pid
+    rc = os.fork() #Forks procesess 
+
+    if rc < 0:
+        os.write(2, ("fork failed, returning %d\n" % rc).encode())
+        sys.exit(1)
+
+    elif rc == 0:                   # child process
+        os.close(0)                 # redirect child's stdout
+        file_input = os.open(path_str, os.O_RDONLY) #Reads from file to use as input
+        os.set_inheritable(0, True)
+
+        args.pop() #Removes last element (usually file name)
+
+        for dir in re.split(":", os.environ['PATH']): # try each directory in path
+            program = "%s/%s" % (dir, program_str)
+            try:
+                os.execve(program, args[0], os.environ) # try to exec program
+            except FileNotFoundError:             # ...expected
+                pass                              # ...fail quietly 
+
+    else:                           # parent (forked ok)
+        childPidCode = os.wait()
+
+def redirect_output(args): #Redirect ouput
+	path = args[1] #Splits up input for forks and redirects
 	path_str = path[0]
 	program = args[0]
 	program_str = program[0]
 
 	pid = os.getpid()               # get and remember pid
-	rc = os.fork()
+	rc = os.fork() #Forks processes
 
 	if rc < 0:
 		os.write(2, ("fork failed, returning %d\n" % rc).encode())
 		sys.exit(1)
 
-	elif rc == 0:                   # child
-		os.close(1)                 # redirect child's stdout
-		fdOut = os.open(path_str, os.O_CREAT | os.O_WRONLY)
-		os.set_inheritable(1, True)
+	elif rc == 0:                   # child process
+		os.close(1)                 # redirect child's standard output
+		file_output = os.open(path_str, os.O_CREAT | os.O_WRONLY) #Creates file to write input to
+		os.set_inheritable(1, True) 
 
-		args.pop()
+		args.pop() #Removes last element (usually file name)
 
 		for dir in re.split(":", os.environ['PATH']): # try each directory in path
 			program = "%s/%s" % (dir, program_str)
@@ -115,19 +147,14 @@ def redirect_output(args): #Redirects
 			except FileNotFoundError:             # ...expected
 				pass                              # ...fail quietly 
 
-		return
 
 	else:                           # parent (forked ok)
-		childPidCode = os.wait()
+		childPidCode = os.wait() #waits until process is finished
 
-	return 
 
 def pipe(args): #Method for pipe instructions
     arg1, arg2 = args[0], args[1]  #Separating commands (only two)
     pipe_read, pipe_write = os.pipe() #Creates pipe
-
-    for f in (pipe_read, pipe_write):
-        os.set_inheritable(f, True)
 
     rc = os.fork() #Creates fork
 
@@ -136,38 +163,58 @@ def pipe(args): #Method for pipe instructions
         sys.exit(1)
 
     elif rc == 0: #Runs first command
-        os.close(1) 
+        os.close(1) #Closes file descriptor (standard output)
         file_descriptor = os.dup(pipe_write) #Gets file descriptor from pipe_write
         os.set_inheritable(1, True) #Sets the inheritable flag for file descriptor to use in child process
 
-        for file_descriptor in (pipe_read, pipe_write): 
-            os.close(file_descriptor)
-        
-        pipe_exec(arg1)
+        if "<" in arg1: #If detects a redirect in the input 
+            arg1.remove("<")
+            for i in range (len(arg1)): #Converts input for redirect method to use.
+                arg1[i] = [arg1[i]]
 
-    elif rc > 0:
-        os.close(0)
-        file_descriptor = os.dup(pipe_read)
-        os.set_inheritable(0, True)
+            redirect_input(arg1)
 
-        for file_descriptor in (pipe_write, pipe_read):
-            os.close(file_descriptor)
-        
-        pipe_exec(arg2)
+        elif ">" in arg1: #If detects a redirect in the input
+            arg1.remove(">")
+            for i in range (len(arg1)): #Converts input for redirect method to use.
+                arg1[i] = [arg1[i]]
 
-    else:
-        main()
-        return
+            redirect_output(arg1)
 
-def pipe_exec(args):
+        else:
+            pipe_exec(arg1) #Runs command for pipe
 
+    elif rc > 0: #Runs second command
+        os.close(0) #Closes file descriptor (standard input)
+        file_descriptor = os.dup(pipe_read) #Gets file descriptor from pipe_read
+        os.set_inheritable(0, True) #Sets the inheritable flag for file descriptor to use in child process
+
+        if "<" in arg2: #If detects a redirect in the input 
+            arg2.remove("<")
+            for i in range (len(arg2)): #Converts input for redirect method to use. 
+                arg2[i] = [arg2[i]]
+
+            redirect_input(arg2)
+
+        elif ">" in arg2: #If detects a redirect in the input 
+            arg2.remove(">")
+            for i in range (len(arg2)): #Converts input for redirect method to use.
+                arg2[i] = [arg2[i]]
+
+            redirect_output(arg2)
+
+        else:
+            pipe_exec(arg2) #Runs command for pipe
+
+
+def pipe_exec(args): #Method to execute pipe command
     for dir in re.split(':', os.environ['PATH']):  # try each directory in the path
         program = "%s/%s" % (dir, args[0])
         try:
             os.execve(program, args, os.environ)  # try to exec program
         except FileNotFoundError:  # ...expected
             pass  # ...fail quietly
-    os.write(2, ("Could not exec %s\n" % parent[0]).encode())
+    os.write(2, ("Could not exec %s\n" % args[0]).encode())
     sys.exit(1)  # terminate with error
 
 
@@ -240,19 +287,19 @@ def background_exec(args): #This method executes commands in background.
 	print(args[0] + " command not found.")
 	sys.exit(-1)
 
-def os_input():
+def os_input(): #For the input 
 	prompt = "$ "
-	if "PS1" in os.environ:
+	if "PS1" in os.environ: #Sets environment variable 
 		prompt = os.environ["PS1"]
 
 	os.write(1, prompt.encode())
-	u_str = os.read(0,1000).decode()
+	u_str = os.read(0,2000).decode() #Takes user input
 	return u_str
 
 def main():
     while(1): #Everything is ran in loop
         u_str = os_input()
-        #u_str = input()
+        #u_str = input() #For debugging purposes 
         args = u_str.splitlines()
 
         for i in range(len(args)): #For inputs that are multiple lines. 
