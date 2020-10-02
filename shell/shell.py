@@ -104,7 +104,7 @@ def redirect_input(args): #Redirects.
         sys.exit(1)
 
     elif rc == 0:                   # child process
-        os.close(0)                 # redirect child's stdout
+        os.close(0)                 # redirect child's standard input
         file_input = os.open(path_str, os.O_RDONLY) #Reads from file to use as input
         os.set_inheritable(0, True)
 
@@ -120,7 +120,7 @@ def redirect_input(args): #Redirects.
     else:                           # parent (forked ok)
         childPidCode = os.wait()
 
-def redirect_output(args): #Redirect ouput
+def redirect_output(args): #Redirect output
 	path = args[1] #Splits up input for forks and redirects
 	path_str = path[0]
 	program = args[0]
@@ -244,7 +244,7 @@ def background_exec(args): #This method executes commands in background.
 		try:
 			os.execve(program, args, os.environ) # try to exec program
 		except FileNotFoundError:             # ...expected
-			print("")
+			pass
 	elif rc > 0:
 		return
 
@@ -257,7 +257,7 @@ def background_exec(args): #This method executes commands in background.
 			try:
 				os.execve(program, args, os.environ) # try to exec program
 			except FileNotFoundError:             # ...expected
-				continue                              # ...fail quietly
+				pass                              # ...fail quietly
 		elif rc > 0: #Does not wait for other command to finish. 
 			return
 
