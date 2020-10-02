@@ -3,7 +3,7 @@
 #Instructor: Dr. Eric Freudenthal
 #T.A: David Pruitt 
 #Assignment: Project 1 
-#Last Modification: 09/15/2020
+#Last Modification: 10/02/2020
 #Purpose: Basic shell
 
 import os 
@@ -21,7 +21,7 @@ def shell_input(u_str): #This method checks out string
         try:
             os.chdir(u_str.split()[1])
         except Exception:
-            print("cd: no such file or directory: {}".format(args[1]))
+            print("cd: no such file or directory: {}".format(u_str))
         return
 
     if '|' in u_str: #Detects pipes from the string
@@ -79,7 +79,7 @@ def shell_input(u_str): #This method checks out string
                 background_exec(n_args[i])
 
         else: #Runs processes normally
-            for i in range(len(args)):
+            for i in range(len(args)): 
                 n_args.append(args[i].split())
 
             for i in range(len(n_args)):
@@ -97,7 +97,7 @@ def redirect_input(args): #Redirects.
     program_str = program[0]
 
     pid = os.getpid()               # get and remember pid
-    rc = os.fork() #Forks procesess 
+    rc = os.fork() #Forks processes 
 
     if rc < 0:
         os.write(2, ("fork failed, returning %d\n" % rc).encode())
@@ -165,55 +165,33 @@ def pipe(args): #Method for pipe instructions
     elif rc == 0: #Runs first command
         os.close(1) #Closes file descriptor (standard output)
         file_descriptor = os.dup(pipe_write) #Gets file descriptor from pipe_write
-        os.set_inheritable(1, True) #Sets the inheritable flag for file descriptor to use in child process
+        os.set_inheritable(file_descriptor, True) #Sets the inheritable flag for file descriptor to use in child process
 
-        if "<" in arg1: #If detects a redirect in the input 
-            arg1.remove("<")
-            for i in range (len(arg1)): #Converts input for redirect method to use.
-                arg1[i] = [arg1[i]]
-
-            redirect_input(arg1)
-
-        elif ">" in arg1: #If detects a redirect in the input
-            arg1.remove(">")
-            for i in range (len(arg1)): #Converts input for redirect method to use.
-                arg1[i] = [arg1[i]]
-
-            redirect_output(arg1)
-
-        else:
-            pipe_exec(arg1) #Runs command for pipe
+        pipe_exec(arg1) #Runs command for pipe
 
     elif rc > 0: #Runs second command
         os.close(0) #Closes file descriptor (standard input)
         file_descriptor = os.dup(pipe_read) #Gets file descriptor from pipe_read
-        os.set_inheritable(0, True) #Sets the inheritable flag for file descriptor to use in child process
+        os.set_inheritable(file_descriptor, True) #Sets the inheritable flag for file descriptor to use in child process
 
-        if "<" in arg2: #If detects a redirect in the input 
-            arg2.remove("<")
-            for i in range (len(arg2)): #Converts input for redirect method to use. 
-                arg2[i] = [arg2[i]]
+        pipe_exec(arg2) #Runs command for pipe
 
-            redirect_input(arg2)
-
-        elif ">" in arg2: #If detects a redirect in the input 
-            arg2.remove(">")
-            for i in range (len(arg2)): #Converts input for redirect method to use.
-                arg2[i] = [arg2[i]]
-
-            redirect_output(arg2)
-
-        else:
-            pipe_exec(arg2) #Runs command for pipe
-
+    return
 
 def pipe_exec(args): #Method to execute pipe command
+    try: #Attempts direct path first
+        program = args[0]
+        os.execve(program, args, os.environ) # try to exec program
+    except FileNotFoundError:             # ...expected
+        pass
+
     for dir in re.split(':', os.environ['PATH']):  # try each directory in the path
         program = "%s/%s" % (dir, args[0])
         try:
             os.execve(program, args, os.environ)  # try to exec program
         except FileNotFoundError:  # ...expected
             pass  # ...fail quietly
+
     os.write(2, ("Could not exec %s\n" % args[0]).encode())
     sys.exit(1)  # terminate with error
 
@@ -265,7 +243,6 @@ def background_exec(args): #This method executes commands in background.
 	elif rc == 0:
 		try:
 			os.execve(program, args, os.environ) # try to exec program
-			return
 		except FileNotFoundError:             # ...expected
 			print("")
 	elif rc > 0:
@@ -299,11 +276,10 @@ def os_input(): #For the input
 def main():
     while(1): #Everything is ran in loop
         u_str = os_input()
-        #u_str = input() #For debugging purposes 
+        #u_str = input("$ ") #For debugging purposes 
         args = u_str.splitlines()
 
         for i in range(len(args)): #For inputs that are multiple lines. 
             shell_input(str(args[i]))
-
 
 main()
